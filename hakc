@@ -1,0 +1,283 @@
+if (not game:IsLoaded()) then
+    game.Loaded:Wait()
+end -- game loaded sanity check >~
+
+--\\ Services
+local Players = game:GetService('Players')
+local RunService = game:GetService('RunService')
+local Workspace = game:GetService('Workspace')
+local Storage = game:GetService('ReplicatedStorage')
+local InputService = game:GetService('UserInputService')
+
+--\\ Variables
+local Client = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local Remote = Storage:FindFirstChild('MainEvent')
+
+local Target
+
+--\\ Table & Modules
+local Settings = {
+    Enabled = true,
+    FoV = { Visible = true, Size = 140 }
+}
+
+local DrawingCircle = Drawing.new('Circle')
+do
+    DrawingCircle.Visible = Settings.FoV.Visible
+    DrawingCircle.Radius = Settings.FoV.Size
+    DrawingCircle.Color = Color3.new(1, 1, 1) -- Change color to white
+    DrawingCircle.Transparency = 0.5 -- Make it slightly transparent
+    DrawingCircle.Filled = false -- Make it unfilled
+    DrawingCircle.Thickness = 2 -- Make it thicker
+end
+
+--\\ Functions
+local function UpdateFoV()
+    DrawingCircle.Visible = Settings.FoV.Visible
+    DrawingCircle.Radius = Settings.FoV.Size
+    DrawingCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+end
+
+local function GetClosestPlayer(Radius)
+    local Distance, Player = Radius
+
+    for _, Value in pairs(Players:GetPlayers()) do
+        if Value == Client then
+            continue
+        end
+
+        local Character = Value.Character
+        local RootPart = Character and Character:FindFirstChild('HumanoidRootPart')
+
+        if not RootPart then
+            continue
+        end
+
+        local Position, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
+        local Magnitude = (Vector2.new(Position.X, Position.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+
+        if Magnitude > Distance then
+            continue
+        end
+
+        if OnScreen then
+            Distance = Magnitude
+            Player = Value
+        end
+    end
+
+    return Player
+end
+
+local function RenderStepped()
+    UpdateFoV()
+    Target = GetClosestPlayer(Settings.FoV.Size)
+end
+
+--\\ Connections
+RunService.RenderStepped:Connect(RenderStepped)
+
+--\\ Hooks
+local namecall
+namecall = hookmetamethod(game, '__namecall', function(self, ...)
+    local Arguments, Method = { ... }, getnamecallmethod()
+
+    if not checkcaller() and Settings.Enabled and Target and Method == 'FireServer' and self == Remote and Arguments[1] == 'UpdateMousePos' then
+        Arguments[2] = Target.Character.HumanoidRootPart.Position + (Target.Character.HumanoidRootPart.Velocity * 0.129)
+        return namecall(self, unpack(Arguments))
+    end
+
+    return namecall(self, ...)
+end)
+
+--\\ Input Listener
+InputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.E then
+        local mouseTarget = InputService:GetMouseTarget()
+        if mouseTarget and mouseTarget.Parent and mouseTarget.Parent:IsA("Model") and Players:GetPlayerFromCharacter(mouseTarget.Parent) then
+            Target = Players:GetPlayerFromCharacter(mouseTarget.Parent)
+        end
+    end
+end)
+
+-- Draw spreading dots
+local function DrawDots(circle, radius, segments)
+    local angleIncrement = 2 * math.pi / segments
+    for i = 1, segments do
+        local angle = i * angleIncrement
+        local x = circle.Position.X + math.cos(angle) * radius
+        local y = circle.Position.Y + math.sin(angle) * radius
+        circle:Add(Vector2.new(x, y))
+    end
+end
+
+DrawDots(DrawingCircle, Settings.FoV.Size, 50) -- Adjust the last parameter for the density of dots
+
+-- GUI
+local Gui = Instance.new("ScreenGui")
+Gui.Parent = game.Players.LocalPlayer.PlayerGui
+
+local Frame = Instance.new("Frame")
+Frame.Name = "C4NC$L3D"
+Frame.Size = UDim2.new(0, 200, 0, 150)
+Frame.Position = UDim2.new(0.5, -100, 0.5, -75)
+Frame.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
+Frame.BorderSizePixel = 0
+Frame.ZIndex = 2
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = Gui
+
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Text = "C4NC$L3D"
+Title.Size = UDim2.new(1, 0, 0, 20)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamSemibold
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Parent = Frame
+
+local FovLabel = Instance.new("TextLabel")
+FovLabel.Name = "FovLabel"
+FovLabel.Text = "FOV Size"
+FovLabel.Size = UDim2.new(0.5, 0, 0, 20)
+FovLabel.Position = UDim2.new(0, 10, 0, 30)
+FovLabel.BackgroundTransparency = 1
+FovLabel.Font = Enum.Font.Gotham
+FovLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FovLabel.TextSize = 14
+FovLabel.Parent = Frame
+
+local FovSlider = Instance.new("TextButton")
+FovSlider.Name = "FovSlider"
+FovSlider.Text = ""
+FovSlider.Size = UDim2.new(0.7, 0, 0, 10)
+FovSlider.Position = UDim2.new(0.15, 0, 0, 60)
+FovSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+FovSlider.BorderSizePixel = 0
+FovSlider.AutoButtonColor = false
+FovSlider.Parent = Frame
+
+local FovBlock = Instance.new("Frame")
+FovBlock.Name = "FovBlock"
+FovBlock.Size = UDim2.new(0, 10, 0, 10)
+FovBlock.Position = UDim2.new(0.5, -5, 0, 0)
+FovBlock.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FovBlock.BorderSizePixel = 0
+FovBlock.Parent = FovSlider
+
+local HideFovButton = Instance.new("TextButton")
+HideFovButton.Name = "HideFovButton"
+HideFovButton.Text = "Hide FOV"
+HideFovButton.Size = UDim2.new(0.5, -5, 0, 20)
+HideFovButton.Position = UDim2.new(0, 10, 0, 100)
+HideFovButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+HideFovButton.BorderSizePixel = 0
+HideFovButton.AutoButtonColor = false
+HideFovButton.Font = Enum.Font.Gotham
+HideFovButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+HideFovButton.TextSize = 14
+HideFovButton.Parent = Frame
+
+local ColorPickerButton = Instance.new("TextButton")
+ColorPickerButton.Name = "ColorPickerButton"
+ColorPickerButton.Text = "Color Picker"
+ColorPickerButton.Size = UDim2.new(0.5, -5, 0, 20)
+ColorPickerButton.Position = UDim2.new(0.5, 5, 0, 100)
+ColorPickerButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ColorPickerButton.BorderSizePixel = 0
+ColorPickerButton.AutoButtonColor = false
+ColorPickerButton.Font = Enum.Font.Gotham
+ColorPickerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ColorPickerButton.TextSize = 14
+ColorPickerButton.Parent = Frame
+
+local BodyPartDropdown = Instance.new("TextButton")
+BodyPartDropdown.Name = "BodyPartDropdown"
+BodyPartDropdown.Text = "Upper Torso"
+BodyPartDropdown.Size = UDim2.new(1, -20, 0, 20)
+BodyPartDropdown.Position = UDim2.new(0, 10, 0, 130)
+BodyPartDropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+BodyPartDropdown.BorderSizePixel = 0
+BodyPartDropdown.AutoButtonColor = false
+BodyPartDropdown.Font = Enum.Font.Gotham
+BodyPartDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+BodyPartDropdown.TextSize = 14
+BodyPartDropdown.Parent = Frame
+
+local CFrameWalkButton = Instance.new("TextButton")
+CFrameWalkButton.Name = "CFrameWalkButton"
+CFrameWalkButton.Text = "CFrame Walk"
+CFrameWalkButton.Size = UDim2.new(1, -20, 0, 20)
+CFrameWalkButton.Position = UDim2.new(0, 10, 0, 160)
+CFrameWalkButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+CFrameWalkButton.BorderSizePixel = 0
+CFrameWalkButton.AutoButtonColor = false
+CFrameWalkButton.Font = Enum.Font.Gotham
+CFrameWalkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CFrameWalkButton.TextSize = 14
+CFrameWalkButton.Parent = Frame
+-- GUI Functionality
+
+FovSlider.MouseButton1Down:Connect(function()
+    FovSlider.MouseMoved:Connect(function()
+        local relativeX = (InputService:GetMouseLocation().X - FovSlider.AbsolutePosition.X) / FovSlider.AbsoluteSize.X
+        local size = math.clamp(relativeX, 0, 1)
+        Settings.FoV.Size = size * 200 -- Adjust the multiplier for max FOV size
+        UpdateFoV()
+    end)
+    FovSlider.MouseButton1Up:Connect(function()
+        FovSlider.MouseMoved:Disconnect()
+    end)
+end)
+
+HideFovButton.MouseButton1Click:Connect(function()
+    Settings.FoV.Visible = not Settings.FoV.Visible
+    UpdateFoV()
+end)
+
+ColorPickerButton.MouseButton1Click:Connect(function()
+    local ColorPicker = Instance.new("ColorPickerFrame")
+    ColorPicker.Parent = Gui
+    ColorPicker.Name = "ColorPicker"
+    ColorPicker.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ColorPicker.Position = UDim2.new(0.5, -125, 0.5, -125)
+    ColorPicker.Size = UDim2.new(0, 250, 0, 250)
+    ColorPicker.Visible = true
+    ColorPicker.Parent = Gui
+
+    ColorPicker.Color = DrawingCircle.Color
+    ColorPicker.ColorChanged:Connect(function(color)
+        DrawingCircle.Color = color
+    end)
+end)
+
+local BodyPartOptions = {
+    "Upper Torso",
+    "Humanoid Root Part",
+    "Lower Torso",
+    "Head"
+}
+
+local CurrentBodyPartIndex = 1
+
+BodyPartDropdown.MouseButton1Click:Connect(function()
+    CurrentBodyPartIndex = CurrentBodyPartIndex % #BodyPartOptions + 1
+    BodyPartDropdown.Text = BodyPartOptions[CurrentBodyPartIndex]
+end)
+
+CFrameWalkButton.MouseButton1Click:Connect(function()
+    InputService.InputBegan:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.V then
+            Client.Character.Humanoid.WalkSpeed = 100
+        end
+    end)
+    InputService.InputEnded:Connect(function(input)
+        if input.KeyCode == Enum.KeyCode.V then
+            Client.Character.Humanoid.WalkSpeed = 16
+        end
+    end)
+end)
